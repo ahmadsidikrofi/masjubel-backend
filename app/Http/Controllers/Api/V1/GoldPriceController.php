@@ -14,18 +14,17 @@ class GoldPriceController extends Controller
 {
     public function index(): JsonResponse
     {
-        // 1. Ambil semua sumber
         $sources = Source::all();
-        
+
         // 2. Dapatkan tanggal terbaru untuk masing-masing source_id (Menghindari N+1)
         $latestDatesQuery = GoldPrice::select('source_id', DB::raw('MAX(DATE(recorded_at)) as latest_date'))
             ->groupBy('source_id');
 
         // 3. Ambil SEMUA harga pada tanggal terbaru tersebut untuk setiap source menggunakan Join
         $latestPrices = GoldPrice::joinSub($latestDatesQuery, 'latest_dates', function ($join) {
-                $join->on('gold_prices.source_id', '=', 'latest_dates.source_id')
-                     ->on(DB::raw('DATE(gold_prices.recorded_at)'), '=', 'latest_dates.latest_date');
-            })
+            $join->on('gold_prices.source_id', '=', 'latest_dates.source_id')
+                ->on(DB::raw('DATE(gold_prices.recorded_at)'), '=', 'latest_dates.latest_date');
+        })
             ->orderBy('gold_prices.weight', 'asc')
             ->get()
             // Group by source_id di memori agar mudah dipetakan
@@ -34,7 +33,7 @@ class GoldPriceController extends Controller
         // 4. Transformasi format ke response
         $responseRaw = $sources->map(function ($source) use ($latestPrices) {
             $prices = $latestPrices->get($source->id, collect());
-            
+
             if ($prices->isEmpty()) {
                 return null;
             }
@@ -57,18 +56,15 @@ class GoldPriceController extends Controller
 
     public function highlight(): JsonResponse
     {
-        // 1. Menggunakan fitur Eager Loading untuk mendapatkan 2 harga terakhir per Source.
-        // Dengan Laravel 11/12, take() di dalam Eager Loading langsung bekerja secara efisien.
-        $sources = Source::with(['goldPrices' => function ($query) {
-            $query->where('weight', 1.0)
-                  ->latest('recorded_at')
-                  ->take(2);
-        }])->get();
+        $sources = Source::all();
 
         $highlights = $sources->map(function ($source) {
-            $prices = $source->goldPrices;
-            
-            // Ambil record ke-1 (terbaru) dan record ke-2 (sebelumnya)
+            $prices = GoldPrice::where('source_id', $source->id)
+                ->where('weight', 1.0)
+                ->latest('recorded_at')
+                ->take(2)
+                ->get();
+
             $latest = $prices->first();
             $previous = $prices->skip(1)->first();
 
@@ -79,7 +75,7 @@ class GoldPriceController extends Controller
             $trendPercentage = 0;
             $isUp = true;
 
-            // 2. Kalkulasi Tren
+            // Kalkulasi Tren
             if ($previous && $previous->base_price > 0) {
                 $diff = $latest->base_price - $previous->base_price;
                 $trendPercentage = round(($diff / $previous->base_price) * 100, 2);
@@ -109,7 +105,6 @@ class GoldPriceController extends Controller
         $sourceSlug = $request->query('source', 'antam');
         $days = (int) $request->query('range', 7);
 
-        // Perbaikan kecil: sebelumnya menggunakan field 'source', seharusnya 'slug'
         $source = Source::where('slug', $sourceSlug)->first();
         if (! $source) {
             return response()->json([
