@@ -1,6 +1,6 @@
 # masJUBEL - Gold Price Aggregator API
 
-[![Laravel Version](https://img.shields.io/badge/Laravel-10%2F11-red.svg)](https://laravel.com)
+[![Laravel Version](https://img.shields.io/badge/Laravel-12.x-red.svg)](https://laravel.com)
 [![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -10,13 +10,11 @@
 
 ## 🚀 Fitur Utama
 
-- **Multi-Source Web Scraping**: Mendukung ekstraksi data secara berkala dari 5 situs utama:
+- **Multi-Source Web Scraping**: Mendukung ekstraksi data secara berkala dari 4 situs utama:
   1. [Logam Mulia (Antam)](https://www.logammulia.com/id/harga-emas-hari-ini)
   2. [UBS Lifestyle](https://ubslifestyle.com/harga-buyback-hari-ini/)
   3. [Hartadinata Gold](https://hrtagold.id/id/gold-price)
   4. [Sampoerna Gold](https://sampoernagold.com/)
-  5. [GoldPrice.org (ID)](https://goldprice.org/id)
-- **Automated Scheduling**: Perekaman data otomatis secara berkala menggunakan Task Scheduler Laravel.
 - **Trend Calculation & Historical Data**: Menyajikan perhitungan tren harga (kenaikan/penurunan) serta format data historis yang siap digunakan untuk pustaka *chart* di frontend.
 - **RESTful API (JSON)**: API terstruktur dengan penanganan versi (v1) dan format respon yang konsisten.
 
@@ -24,7 +22,7 @@
 
 ## 🛠️ Teknologi & Library
 
-- **Framework**: Laravel 10+ / 11+
+- **Framework**: Laravel 12+
 - **HTTP Client**: GuzzleHttp
 - **HTML Parser**: Symfony DomCrawler
 - **Database**: Eloquent ORM (MySQL / PostgreSQL / SQLite)
@@ -40,7 +38,6 @@ Berikut adalah letak berkas-berkas penting dalam proyek ini:
 ├── app/
 │   ├── Console/
 │   │   └── Commands/              # Logika dan Perintah Scraper (Artisan CLI)
-│   │       ├── ScrapeGoldPriceOrg.php
 │   │       ├── ScrapeHartadinataGold.php
 │   │       ├── ScrapeLogamMuliaGold.php
 │   │       ├── ScrapeSampoernaGold.php
@@ -63,8 +60,8 @@ Berikut adalah letak berkas-berkas penting dalam proyek ini:
 
 ### 1. Klon Repositori
 ```bash
-git clone https://github.com/username/masjubel-api.git
-cd masjubel-api
+git clone https://github.com/username/masjubel-backend.git
+cd masjubel-backend
 ```
 
 ### 2. Instalasi Dependensi
@@ -86,11 +83,11 @@ php artisan migrate --seed
 ```
 
 ### 5. Menjalankan Scraper Secara Manual
-Anda dapat memicu scraper secara manual untuk setiap platform menggunakan perintah Artisan berikut:
-```bash
-php artisan scrape:hartadinata
-# Silakan sesuaikan signature command lainnya di app/Console/Commands
-```
+# Jalankan scraper secara spesifik sesuai command signature:
+php artisan scrape:hartadinata-gold
+php artisan scrape:sampoerna-gold
+php artisan scrape:antam-gold
+php artisan scrape:ubs-gold
 
 ---
 

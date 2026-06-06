@@ -7,40 +7,47 @@ use App\Http\Resources\v1\GoldPriceResource;
 use App\Models\GoldPrice;
 use App\Models\Source;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GoldPriceController extends Controller
 {
     public function index(): JsonResponse
     {
-        // 1. Ambil semua master source yang terdaftar
+        // 1. Ambil semua sumber
         $sources = Source::all();
-        $responseRaw = [];
+        
+        // 2. Dapatkan tanggal terbaru untuk masing-masing source_id (Menghindari N+1)
+        $latestDatesQuery = GoldPrice::select('source_id', DB::raw('MAX(DATE(recorded_at)) as latest_date'))
+            ->groupBy('source_id');
 
-        foreach ($sources as $source) {
-            // 2. Cari tanggal perekaman data terbaru untuk source ini
-            $latestRecord = GoldPrice::where('source_id', $source->id)
-                ->latest('recorded_at')
-                ->first();
+        // 3. Ambil SEMUA harga pada tanggal terbaru tersebut untuk setiap source menggunakan Join
+        $latestPrices = GoldPrice::joinSub($latestDatesQuery, 'latest_dates', function ($join) {
+                $join->on('gold_prices.source_id', '=', 'latest_dates.source_id')
+                     ->on(DB::raw('DATE(gold_prices.recorded_at)'), '=', 'latest_dates.latest_date');
+            })
+            ->orderBy('gold_prices.weight', 'asc')
+            ->get()
+            // Group by source_id di memori agar mudah dipetakan
+            ->groupBy('source_id');
 
-            if ($latestRecord) {
-                // 3. Ambil semua data pecahan gramasi pada tanggal terbaru tersebut
-                $prices = GoldPrice::where('source_id', $source->id)
-                    ->whereDate('recorded_at', $latestRecord->recorded_at->toDateString())
-                    ->orderBy('weight', 'asc')
-                    ->get();
-
-                // 4. Bungkus ke dalam format array berkelompok
-                $responseRaw[] = [
-                    'source_name' => $source->name,
-                    'source_slug' => $source->slug,
-                    'source_url' => $source->url,
-                    'last_updated' => $latestRecord->recorded_at->toIso8601String(),
-                    'prices' => GoldPriceResource::collection($prices),
-                ];
+        // 4. Transformasi format ke response
+        $responseRaw = $sources->map(function ($source) use ($latestPrices) {
+            $prices = $latestPrices->get($source->id, collect());
+            
+            if ($prices->isEmpty()) {
+                return null;
             }
-        }
 
-        // 5. Return response JSON standar API masJUBEL
+            return [
+                'source_name' => $source->name,
+                'source_slug' => $source->slug,
+                'source_url' => $source->url,
+                'last_updated' => $prices->first()->recorded_at->toIso8601String(),
+                'prices' => GoldPriceResource::collection($prices),
+            ];
+        })->filter()->values();
+
         return response()->json([
             'status' => 'success',
             'message' => 'Success fetch all latest gold prices data',
@@ -50,48 +57,45 @@ class GoldPriceController extends Controller
 
     public function highlight(): JsonResponse
     {
-        $sources = Source::all();
-        $highlights = [];
+        // 1. Menggunakan fitur Eager Loading untuk mendapatkan 2 harga terakhir per Source.
+        // Dengan Laravel 11/12, take() di dalam Eager Loading langsung bekerja secara efisien.
+        $sources = Source::with(['goldPrices' => function ($query) {
+            $query->where('weight', 1.0)
+                  ->latest('recorded_at')
+                  ->take(2);
+        }])->get();
 
-        foreach ($sources as $source) {
-            // 1. Ambil data harga 1 gram TERBARU (Hari ini)
-            $latest = GoldPrice::where('source_id', $source->id)
-                ->where('weight', 1.0) // 1 gram
-                ->latest('recorded_at')
-                ->first();
+        $highlights = $sources->map(function ($source) {
+            $prices = $source->goldPrices;
+            
+            // Ambil record ke-1 (terbaru) dan record ke-2 (sebelumnya)
+            $latest = $prices->first();
+            $previous = $prices->skip(1)->first();
 
             if (! $latest) {
-                continue;
+                return null;
             }
 
-            // 2. Ambil data harga 1 gram SEBELUMNYA (H-1 atau data record terakhir sebelum hari ini)
-            $previous = GoldPrice::where('source_id', $source->id)
-                ->where('weight', 1.0)
-                ->whereDate('recorded_at', '<', $latest->recorded_at->toDateString())
-                ->latest('recorded_at')
-                ->first();
-
-            // 3. Kalkulasi Tren (Persentase Naik/Turun)
             $trendPercentage = 0;
             $isUp = true;
 
+            // 2. Kalkulasi Tren
             if ($previous && $previous->base_price > 0) {
                 $diff = $latest->base_price - $previous->base_price;
                 $trendPercentage = round(($diff / $previous->base_price) * 100, 2);
-                $isUp = $diff >= 0; // true jika naik/tetap, false jika turun
+                $isUp = $diff >= 0;
             }
 
-            $highlights[] = [
+            return [
                 'source_name' => $source->name,
                 'weight' => 1,
                 'current_price' => $latest->base_price,
                 'previous_price' => $previous ? $previous->base_price : null,
-                'trend_percentage' => abs($trendPercentage), // Pakai absolute agar minusnya diwakilkan is_up
+                'trend_percentage' => abs($trendPercentage),
                 'is_up' => $isUp,
                 'last_updated' => $latest->recorded_at->toIso8601String(),
             ];
-
-        }
+        })->filter()->values();
 
         return response()->json([
             'status' => 'success',
@@ -105,7 +109,8 @@ class GoldPriceController extends Controller
         $sourceSlug = $request->query('source', 'antam');
         $days = (int) $request->query('range', 7);
 
-        $source = Source::where('source', $sourceSlug)->first();
+        // Perbaikan kecil: sebelumnya menggunakan field 'source', seharusnya 'slug'
+        $source = Source::where('slug', $sourceSlug)->first();
         if (! $source) {
             return response()->json([
                 'status' => 'error',
