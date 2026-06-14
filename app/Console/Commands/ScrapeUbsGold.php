@@ -41,7 +41,6 @@ class ScrapeUbsGold extends Command
 
         $url = 'https://ubslifestyle.com/harga-buyback-hari-ini/';
 
-        // Pakai User-Agent standar biar lebih aman
         $response = Http::withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0',
         ])->get($url);
@@ -55,7 +54,6 @@ class ScrapeUbsGold extends Command
         $crawler = new Crawler($response->body());
         $results = [];
 
-        // Targetkan baris di dalam tbody yang memiliki class 'table-price'
         $crawler->filter('table tbody tr.table-price')->each(function (Crawler $node) use (&$results) {
             $tds = $node->filter('td');
 
@@ -64,10 +62,8 @@ class ScrapeUbsGold extends Command
                 $baseRaw = $tds->eq(1)->text();
                 $buybackRaw = $tds->eq(2)->text();
 
-                // Bersihkan "Gram" dan spasi yang banyak, lalu parse ke float
                 $weight = (float) preg_replace('/[^0-9.]/', '', $weightRaw);
 
-                // Bersihkan "Rp" dan titik ribuan, lalu parse ke integer
                 $basePrice = (int) preg_replace('/[^0-9]/', '', $baseRaw);
                 $buybackPrice = (int) preg_replace('/[^0-9]/', '', $buybackRaw);
 

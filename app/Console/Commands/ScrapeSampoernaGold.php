@@ -48,12 +48,9 @@ class ScrapeSampoernaGold extends Command
 
             return;
         }
-
-        // Inisialisasi Crawler
         $crawler = new Crawler($response->body());
         $results = [];
 
-        // Pengecekan sederhana: Apakah angka "0,5" ada di HTML?
         if (! str_contains($response->body(), '0,5')) {
             $this->warn('Data tidak ditemukan di HTML mentah. Coba cek Network tab di browser, kemungkinan pakai API!');
 
@@ -64,14 +61,12 @@ class ScrapeSampoernaGold extends Command
             // Ekstrak teks dari kolom <td>
             $tds = $node->filter('td');
 
-            // Baris header pakai <th>, jadi tds->count() akan 0.
-            // Kita cuma ambil baris yang punya minimal 3 <td>
             if ($tds->count() >= 3) {
                 $weightRaw = $tds->eq(0)->text();
                 $baseRaw = $tds->eq(1)->text();
                 $buybackRaw = $tds->eq(2)->text();
 
-                // Pembersihan Berat: Hapus semua kecuali angka & koma, lalu ubah koma jadi titik
+                // Pembersihan Berat
                 $weightClean = str_replace(',', '.', preg_replace('/[^0-9,]/', '', $weightRaw));
                 $weight = (float) $weightClean;
 
@@ -79,7 +74,6 @@ class ScrapeSampoernaGold extends Command
                 $basePrice = (int) preg_replace('/[^0-9]/', '', $baseRaw);
                 $buybackPrice = (int) preg_replace('/[^0-9]/', '', $buybackRaw);
 
-                // Masukkan ke array jika berat valid
                 if ($weight > 0) {
                     $results[] = [
                         'weight' => $weight,

@@ -40,7 +40,7 @@ class ScrapeLogamMuliaGold extends Command
         }
 
         $targetUrl = 'https://www.logammulia.com/id/harga-emas-hari-ini';
-        $apiKey = '003bcb6e13de7d2d9bc5179fc1fccdd6';
+        $apiKey = env('SCRAPER_API_KEY');
 
         $url = "http://api.scraperapi.com?api_key={$apiKey}&url=".urlencode($targetUrl);
 
